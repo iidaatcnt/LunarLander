@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunar Lander - 月面着陸ゲーム</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            font-size: 14px;
+        }
+        
+        .terminal {
+            background-color: #001100;
+            border: 2px solid #00ff00;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            border-radius: 5px;
+            box-shadow: 0 0 20px #00ff0050;
+        }
+        
+        .title {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        
+        .game-area {
+            white-space: pre-line;
+            line-height: 1.2;
+            margin: 20px 0;
+            min-height: 300px;
+        }
+        
+        .status {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #00ff00;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        button {
+            background-color: #003300;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px 20px;
+            margin: 5px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        
+        button:hover {
+            background-color: #004400;
+            box-shadow: 0 0 5px #00ff00;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .blink {
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .red { color: #ff0000; }
+        .yellow { color: #ffff00; }
+        .cyan { color: #00ffff; }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <div class="title">*** LUNAR LANDER ***</div>
+        
+        <div class="status">
+            <div>高度: <span id="altitude">1000</span>m</div>
+            <div>速度: <span id="velocity">0</span>m/s</div>
+            <div>燃料: <span id="fuel">100</span>%</div>
+        </div>
+        
+        <div class="game-area" id="gameArea"></div>
+        
+        <div class="controls">
+            <button id="thrustBtn" onclick="thrust()">推進 (T)</button>
+            <button id="startBtn" onclick="startGame()">ゲーム開始</button>
+            <button onclick="showInstructions()">操作説明</button>
+        </div>
+        
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let gameState = {
+            altitude: 1000,
+            velocity: 0,
+            fuel: 100,
+            thrustPower: 0,
+            gravity: 1.6, // 月の重力
+            gameRunning: false,
+            gameOver: false
+        };
+
+        let gameInterval;
+        let displayText = '';
+
+        function initGame() {
+            gameState = {
+                altitude: 1000,
+                velocity: 0,
+                fuel: 100,
+                thrustPower: 0,
+                gravity: 0.8,
+                gameRunning: false,
+                gameOver: false
+            };
+            updateDisplay();
+            showWelcomeMessage();
+        }
+
+        function showWelcomeMessage() {
+            displayText = `
+=== 月面着陸ミッション ===
+
+月面着陸船を操縦して安全に着陸させてください。
+
+目標: 速度5m/s以下で月面に着陸
+警告: 速度が速すぎると墜落します！
+
+燃料は限られています。慎重に使用してください。
+
+準備はよろしいですか？
+            `;
+            document.getElementById('gameArea').innerHTML = displayText;
+        }
+
+        function showInstructions() {
+            displayText = `
+=== 操作説明 ===
+
+• [推進]ボタンまたは[T]キー: エンジン推進
+• エンジンは重力に逆らって上向きの力を与えます
+• 燃料が尽きるとエンジンは使用できません
+• 高度0mで速度5m/s以下なら着陸成功
+• 速度が速すぎると墜落します
+
+物理法則:
+• 重力: 1.6m/s²（月面）
+• 推進力: 3.0m/s²
+
+頑張って！
+            `;
+            document.getElementById('gameArea').innerHTML = displayText;
+        }
+
+        function startGame() {
+            if (gameState.gameRunning) return;
+            
+            // ゲーム状態をリセット
+            gameState = {
+                altitude: 1000,
+                velocity: 0,
+                fuel: 100,
+                thrustPower: 0,
+                gravity: 0.8,  // 重力を半分に
+                gameRunning: true,
+                gameOver: false
+            };
+            
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('startBtn').textContent = 'ゲーム開始';
+            
+            displayText = `
+ミッション開始！
+
+月面着陸船が降下を開始しました。
+燃料を管理しながら安全に着陸させてください。
+
+            `;
+            document.getElementById('gameArea').innerHTML = displayText;
+            
+            gameInterval = setInterval(gameLoop, 100);
+        }
+
+        function thrust() {
+            if (!gameState.gameRunning || gameState.gameOver || gameState.fuel <= 0) return;
+            
+            gameState.thrustPower = 2.5;  // 推進力を強化
+            gameState.fuel = Math.max(0, gameState.fuel - 0.8);  // 燃料消費を減らす
+            
+            // 推進エフェクトを一定時間維持
+            setTimeout(() => {
+                if (gameState.gameRunning && !gameState.gameOver) {
+                    gameState.thrustPower = 0;
+                }
+            }, 300);  // 効果時間を延長
+        }
+
+        function gameLoop() {
+            if (!gameState.gameRunning || gameState.gameOver) return;
+
+            // 物理計算（重力は下向き、推進は上向き）
+            let netAcceleration = gameState.gravity - gameState.thrustPower;
+            gameState.velocity += netAcceleration * 0.1;
+            gameState.altitude -= gameState.velocity * 0.1;
+
+            updateDisplay();
+            updateGameArea();
+
+            // ゲーム終了条件チェック
+            if (gameState.altitude <= 0) {
+                gameState.altitude = 0;
+                endGame();
+            }
+        }
+
+        function updateDisplay() {
+            document.getElementById('altitude').textContent = Math.round(gameState.altitude);
+            document.getElementById('velocity').textContent = Math.round(gameState.velocity * 10) / 10;
+            document.getElementById('fuel').textContent = Math.round(gameState.fuel);
+            
+            // 燃料警告
+            if (gameState.fuel < 20) {
+                document.getElementById('fuel').className = 'red blink';
+            } else if (gameState.fuel < 40) {
+                document.getElementById('fuel').className = 'yellow';
+            } else {
+                document.getElementById('fuel').className = '';
+            }
+            
+            // 速度警告
+            if (gameState.velocity > 10) {
+                document.getElementById('velocity').className = 'red';
+            } else if (gameState.velocity > 5) {
+                document.getElementById('velocity').className = 'yellow';
+            } else {
+                document.getElementById('velocity').className = '';
+            }
+        }
+
+        function updateGameArea() {
+            let altitudeBar = '';
+            let barLength = 40;
+            let position = Math.round((1000 - gameState.altitude) / 1000 * barLength);
+            
+            for (let i = 0; i < barLength; i++) {
+                if (i === position) {
+                    altitudeBar += '▼';
+                } else if (i === barLength - 1) {
+                    altitudeBar += '█'; // 月面
+                } else {
+                    altitudeBar += '·';
+                }
+            }
+
+            let thrustIndicator = gameState.thrustPower > 0 ? '🔥' : '  ';
+            let fuelBar = '█'.repeat(Math.round(gameState.fuel / 5));
+            
+            displayText = `
+高度計:
+${altitudeBar}
+
+着陸船: ${thrustIndicator}
+         ▲
+        ███
+
+燃料残量: ${fuelBar}
+
+速度: ${gameState.velocity > 0 ? '↓' : gameState.velocity < 0 ? '↑' : '－'} ${Math.abs(gameState.velocity).toFixed(1)} m/s
+            `;
+            
+            document.getElementById('gameArea').innerHTML = displayText;
+        }
+
+        function endGame() {
+            gameState.gameRunning = false;
+            gameState.gameOver = true;
+            clearInterval(gameInterval);
+            
+            let result = '';
+            if (Math.abs(gameState.velocity) <= 5) {
+                result = `
+🌙 *** 着陸成功！ ***
+
+素晴らしい！月面への軟着陸に成功しました。
+着陸速度: ${Math.abs(gameState.velocity).toFixed(1)} m/s
+残燃料: ${gameState.fuel}%
+
+月面での任務を開始してください。
+
+                `;
+            } else {
+                result = `
+💥 *** 墜落 ***
+
+着陸船は月面に激突しました。
+衝突速度: ${Math.abs(gameState.velocity).toFixed(1)} m/s
+
+次回はもっと慎重に着陸してください。
+
+                `;
+            }
+            
+            document.getElementById('gameArea').innerHTML = result;
+            
+            // ボタンを有効化してテキストを変更
+            setTimeout(() => {
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('startBtn').textContent = '再チャレンジ';
+            }, 1000);
+        }
+
+        // キーボード操作
+        document.addEventListener('keydown', function(event) {
+            if (event.key.toLowerCase() === 't') {
+                thrust();
+            }
+        });
+
+        // 初期化
+        initGame();
+    </script>
+</body>
+</html>
