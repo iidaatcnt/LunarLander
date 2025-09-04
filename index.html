@@ -193,6 +193,10 @@
                 lastUserInput: Date.now() - 3000, // 3秒前に設定してデモが早く開始されるように
                 demoActionTimer: 0
             };
+            
+            // デモ表示を確実に消す
+            document.getElementById('demoText').style.display = 'none';
+            
             updateDisplay();
             showWelcomeMessage();
         }
@@ -235,10 +239,9 @@
         function startGame() {
             if (gameState.gameRunning) return;
             
-            // デモモードを終了
-            if (gameState.isDemo) {
-                stopDemo();
-            }
+            // デモモードを終了（表示も確実に消す）
+            gameState.isDemo = false;
+            document.getElementById('demoText').style.display = 'none';
             
             // ゲーム状態をリセット
             gameState = {
