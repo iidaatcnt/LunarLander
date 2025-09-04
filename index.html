@@ -257,8 +257,14 @@
                 demoActionTimer: 0
             };
             
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('startBtn').textContent = 'ゲーム開始';
+            // デモモード中はボタンを有効にしておく
+            if (!gameState.isDemo) {
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('startBtn').textContent = 'ゲーム開始';
+            } else {
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('startBtn').textContent = 'プレイ開始';
+            }
             
             displayText = `
 ミッション開始！
@@ -560,8 +566,10 @@ ${altitudeBar}
             
             // 目標速度を高度に応じて計算
             let targetVelocity;
-            if (altitudeRatio > 0.5) {
-                targetVelocity = 8; // 高高度では速めに降下
+            if (altitudeRatio > 0.7) {
+                targetVelocity = 10; // 高高度では速めに降下
+            } else if (altitudeRatio > 0.5) {
+                targetVelocity = 7; // 高高度では速めに降下
             } else if (altitudeRatio > 0.3) {
                 targetVelocity = 5; // 中高度では中程度
             } else if (altitudeRatio > 0.1) {
@@ -575,30 +583,38 @@ ${altitudeBar}
                 targetVelocity = Math.min(targetVelocity, 2.5);
             }
             if (gameState.altitude < 20) {
-                targetVelocity = Math.min(targetVelocity, 1.5);
+                targetVelocity = Math.min(targetVelocity, 1.8);
             }
             
-            // 推進判断の改善
+            // 推進判断の改善（より積極的に）
             const velocityDiff = velocity - targetVelocity;
-            const shouldThrust = velocityDiff > 0.5; // 目標速度より0.5m/s以上速い場合
+            const shouldThrust = velocityDiff > 0.3; // 閾値を下げてより頻繁に推進
             
-            // 燃料保存のための制御
-            const fuelThreshold = altitudeRatio * 30 + 10; // 高度に応じて燃料保存
+            // 燃料保存のための制御（より緩和）
+            const fuelThreshold = Math.max(5, altitudeRatio * 20 + 5); // 最低限の燃料確保
             
-            // 推進の頻度調整（速度差が大きいほど頻繁に）
+            // 推進の頻度調整（より頻繁に）
             let thrustInterval;
-            if (Math.abs(velocityDiff) > 3) {
-                thrustInterval = 3; // 緊急時は頻繁に
+            if (Math.abs(velocityDiff) > 2) {
+                thrustInterval = 2; // 緊急時は非常に頻繁に
             } else if (Math.abs(velocityDiff) > 1) {
-                thrustInterval = 8; // 通常時
+                thrustInterval = 4; // 通常時はより頻繁に
+            } else if (Math.abs(velocityDiff) > 0.5) {
+                thrustInterval = 6; // 細かい調整でも頻繁に
             } else {
-                thrustInterval = 15; // 細かい調整
+                thrustInterval = 8; // 微調整
             }
             
+            // より積極的な推進条件
             if (shouldThrust && 
                 gameState.fuel > fuelThreshold && 
                 gameState.demoActionTimer % thrustInterval === 0) {
                 thrust();
+            }
+            
+            // 緊急着陸制御（高速で地面に近づいている場合）
+            if (gameState.altitude < 30 && velocity > 4) {
+                thrust(); // 連続推進で緊急減速
             }
         }
         
