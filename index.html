@@ -36,7 +36,45 @@
             white-space: pre-line;
             line-height: 1.2;
             margin: 20px 0;
-            min-height: 300px;
+            min-height: 400px;
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+        }
+        
+        .text-display {
+            flex: 1;
+            margin-right: 20px;
+            min-height: 400px;
+        }
+        
+        .visual-display {
+            width: 400px;
+            height: 400px;
+            border: 1px solid #00ff00;
+            background-color: #000800;
+            position: relative;
+        }
+        
+        canvas {
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+        }
+        
+        .demo-mode {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #00ff00;
+            font-size: 16px;
+            font-weight: bold;
+            animation: blink 1s infinite;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 5px 15px;
+            border: 1px solid #00ff00;
+            border-radius: 3px;
         }
         
         .status {
@@ -98,7 +136,15 @@
             <div>燃料: <span id="fuel">100</span>%</div>
         </div>
         
-        <div class="game-area" id="gameArea"></div>
+        <div class="game-area">
+            <div class="text-display" id="gameArea"></div>
+            <div class="visual-display">
+                <canvas id="gameCanvas" width="400" height="400"></canvas>
+                <div id="demoText" class="demo-mode" style="display: none;">
+                    DEMO MODE - キー操作でプレイ開始
+                </div>
+            </div>
+        </div>
         
         <div class="controls">
             <button id="thrustBtn" onclick="thrust()">推進 (T)</button>
@@ -117,11 +163,18 @@
             thrustPower: 0,
             gravity: 1.6, // 月の重力
             gameRunning: false,
-            gameOver: false
+            gameOver: false,
+            isDemo: false,
+            lastUserInput: Date.now(),
+            demoActionTimer: 0
         };
 
         let gameInterval;
         let displayText = '';
+        
+        // キャンバスとコンテキストを取得
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
         function initGame() {
             gameState = {
@@ -216,21 +269,46 @@
         }
 
         function gameLoop() {
-            if (!gameState.gameRunning || gameState.gameOver) return;
-
-            // 物理計算（重力は下向き、推進は上向き）
-            let netAcceleration = gameState.gravity - gameState.thrustPower;
-            gameState.velocity += netAcceleration * 0.1;
-            gameState.altitude -= gameState.velocity * 0.1;
-
-            updateDisplay();
-            updateGameArea();
-
-            // ゲーム終了条件チェック
-            if (gameState.altitude <= 0) {
-                gameState.altitude = 0;
-                endGame();
+            // デモモードのチェック
+            checkDemoMode();
+            
+            // デモモード中はAIが操作
+            if (gameState.isDemo) {
+                updateDemoAI();
+                
+                // デモモード中のゲームオーバー時は自動再開
+                if (gameState.gameOver) {
+                    setTimeout(() => {
+                        initGame();
+                        gameState.isDemo = true;
+                        document.getElementById('demoText').style.display = 'block';
+                        setTimeout(() => {
+                            if (gameState.isDemo) {
+                                startGame();
+                            }
+                        }, 2000);
+                    }, 3000);
+                }
             }
+            
+            if (gameState.gameRunning && !gameState.gameOver) {
+                // 物理計算（重力は下向き、推進は上向き）
+                let netAcceleration = gameState.gravity - gameState.thrustPower;
+                gameState.velocity += netAcceleration * 0.1;
+                gameState.altitude -= gameState.velocity * 0.1;
+
+                updateDisplay();
+                updateGameArea();
+
+                // ゲーム終了条件チェック
+                if (gameState.altitude <= 0) {
+                    gameState.altitude = 0;
+                    endGame();
+                }
+            }
+            
+            // キャンバスを更新
+            drawGame();
         }
 
         function updateDisplay() {
@@ -329,15 +407,217 @@ ${altitudeBar}
             }, 1000);
         }
 
+        // キャンバスの描画処理
+        function drawGame() {
+            // キャンバスをクリア
+            ctx.fillStyle = '#000800';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 月面を描画
+            drawLunarSurface();
+            
+            // 宇宙船を描画
+            if (gameState.gameRunning || gameState.gameOver) {
+                drawSpacecraft();
+            }
+            
+            // 推進炎を描画
+            if (gameState.thrustPower > 0 && gameState.gameRunning && !gameState.gameOver) {
+                drawThrustFlame();
+            }
+            
+            // 星を描画
+            drawStars();
+        }
+        
+        function drawLunarSurface() {
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            
+            // 月面のライン
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height - 20);
+            for (let x = 0; x < canvas.width; x += 20) {
+                const y = canvas.height - 20 + Math.sin(x * 0.05) * 3;
+                ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            
+            // 月面のテクスチャ
+            ctx.fillStyle = '#003300';
+            for (let x = 10; x < canvas.width; x += 30) {
+                for (let y = canvas.height - 15; y < canvas.height; y += 5) {
+                    if (Math.random() > 0.7) {
+                        ctx.fillRect(x, y, 2, 2);
+                    }
+                }
+            }
+        }
+        
+        function drawSpacecraft() {
+            // 宇宙船の位置を計算
+            const shipX = canvas.width / 2;
+            const shipY = canvas.height - 20 - (gameState.altitude / 1000) * (canvas.height - 40);
+            
+            ctx.strokeStyle = gameState.isDemo ? '#00ffff' : '#00ff00';
+            ctx.fillStyle = gameState.isDemo ? '#004444' : '#003300';
+            ctx.lineWidth = 2;
+            
+            // デモモードの光る効果
+            if (gameState.isDemo) {
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 10;
+            }
+            
+            // 宇宙船の本体（三角形）
+            ctx.beginPath();
+            ctx.moveTo(shipX, shipY - 10);
+            ctx.lineTo(shipX - 8, shipY + 5);
+            ctx.lineTo(shipX + 8, shipY + 5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // 着陸脚
+            ctx.beginPath();
+            ctx.moveTo(shipX - 6, shipY + 5);
+            ctx.lineTo(shipX - 10, shipY + 12);
+            ctx.moveTo(shipX + 6, shipY + 5);
+            ctx.lineTo(shipX + 10, shipY + 12);
+            ctx.stroke();
+            
+            // シャドウをリセット
+            ctx.shadowBlur = 0;
+        }
+        
+        function drawThrustFlame() {
+            const shipX = canvas.width / 2;
+            const shipY = canvas.height - 20 - (gameState.altitude / 1000) * (canvas.height - 40);
+            
+            // 炎の色をランダムに変化
+            const colors = ['#ff6600', '#ff3300', '#ffff00'];
+            const flameColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            ctx.strokeStyle = flameColor;
+            ctx.fillStyle = flameColor;
+            ctx.lineWidth = 2;
+            
+            // 炎の形状をランダムに変化
+            const flameHeight = 15 + Math.random() * 10;
+            const flameWidth = 4 + Math.random() * 4;
+            
+            ctx.beginPath();
+            ctx.moveTo(shipX, shipY + 5);
+            ctx.lineTo(shipX - flameWidth, shipY + flameHeight);
+            ctx.lineTo(shipX + flameWidth, shipY + flameHeight);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        function drawStars() {
+            ctx.fillStyle = '#00ff00';
+            // 固定の星の位置
+            const stars = [
+                {x: 50, y: 50}, {x: 120, y: 30}, {x: 200, y: 70},
+                {x: 280, y: 40}, {x: 350, y: 60}, {x: 80, y: 100},
+                {x: 300, y: 120}, {x: 150, y: 90}, {x: 320, y: 80}
+            ];
+            
+            stars.forEach(star => {
+                if (Math.random() > 0.3) { // 星の点滅
+                    ctx.fillRect(star.x, star.y, 1, 1);
+                }
+            });
+        }
+        
+        // デモモードのAI制御
+        function updateDemoAI() {
+            gameState.demoActionTimer++;
+            
+            if (!gameState.gameRunning || gameState.gameOver) return;
+            
+            // 簡単なAIロジック：適度に推進して着陸を目指す
+            const targetVelocity = 3; // 目標速度
+            const altitudeRatio = gameState.altitude / 1000;
+            
+            // 高度が低くなるほど慎重に
+            const shouldThrust = gameState.velocity > targetVelocity || 
+                               (altitudeRatio < 0.3 && gameState.velocity > 2) ||
+                               (altitudeRatio < 0.1 && gameState.velocity > 1);
+            
+            if (shouldThrust && gameState.fuel > 5 && gameState.demoActionTimer % 10 === 0) {
+                thrust();
+            }
+        }
+        
+        // デモモードのチェック
+        function checkDemoMode() {
+            if (gameState.isDemo || gameState.gameRunning) return;
+            
+            // 5秒間操作がなければデモモード開始
+            if (Date.now() - gameState.lastUserInput > 5000) {
+                startDemo();
+            }
+        }
+        
+        // デモモード開始
+        function startDemo() {
+            gameState.isDemo = true;
+            gameState.demoActionTimer = 0;
+            document.getElementById('demoText').style.display = 'block';
+            
+            // ゲームを自動開始
+            setTimeout(() => {
+                if (gameState.isDemo) {
+                    startGame();
+                }
+            }, 1000);
+        }
+        
+        // デモモード終了
+        function stopDemo() {
+            if (gameState.isDemo) {
+                gameState.isDemo = false;
+                document.getElementById('demoText').style.display = 'none';
+            }
+        }
+        
         // キーボード操作
         document.addEventListener('keydown', function(event) {
+            // ユーザー入力を記録
+            gameState.lastUserInput = Date.now();
+            
+            // デモモード中の場合は終了
+            if (gameState.isDemo) {
+                stopDemo();
+            }
+            
             if (event.key.toLowerCase() === 't') {
                 thrust();
             }
         });
+        
+        // ボタンクリック時もユーザー入力として記録
+        document.getElementById('thrustBtn').addEventListener('click', () => {
+            gameState.lastUserInput = Date.now();
+            if (gameState.isDemo) {
+                stopDemo();
+            }
+        });
+        
+        document.getElementById('startBtn').addEventListener('click', () => {
+            gameState.lastUserInput = Date.now();
+            if (gameState.isDemo) {
+                stopDemo();
+            }
+        });
 
+        // メインループを開始
+        setInterval(gameLoop, 50); // 20 FPS
+        
         // 初期化
         initGame();
+        drawGame();
     </script>
 </body>
 </html>
