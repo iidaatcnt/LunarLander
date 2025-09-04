@@ -141,7 +141,11 @@
             <div class="visual-display">
                 <canvas id="gameCanvas" width="400" height="400"></canvas>
                 <div id="demoText" class="demo-mode" style="display: none;">
-                    DEMO MODE - キー操作でプレイ開始
+                    DEMO MODE - 何かキーを押してプレイ開始
+                </div>
+                <div class="controls-info" style="position: absolute; bottom: -50px; left: 0; right: 0; text-align: center; font-size: 12px; color: #00ff00;">
+                    操作: [T]キーまたは[推進]ボタンでエンジン点火<br>
+                    目標: 速度5m/s以下で月面に着陸
                 </div>
             </div>
         </div>
@@ -535,22 +539,56 @@ ${altitudeBar}
             });
         }
         
-        // デモモードのAI制御
+        // デモモードのAI制御（改善版）
         function updateDemoAI() {
             gameState.demoActionTimer++;
             
             if (!gameState.gameRunning || gameState.gameOver) return;
             
-            // 簡単なAIロジック：適度に推進して着陸を目指す
-            const targetVelocity = 3; // 目標速度
+            // 高度と速度に基づいた精密な制御
             const altitudeRatio = gameState.altitude / 1000;
+            const velocity = gameState.velocity;
             
-            // 高度が低くなるほど慎重に
-            const shouldThrust = gameState.velocity > targetVelocity || 
-                               (altitudeRatio < 0.3 && gameState.velocity > 2) ||
-                               (altitudeRatio < 0.1 && gameState.velocity > 1);
+            // 目標速度を高度に応じて計算
+            let targetVelocity;
+            if (altitudeRatio > 0.5) {
+                targetVelocity = 8; // 高高度では速めに降下
+            } else if (altitudeRatio > 0.3) {
+                targetVelocity = 5; // 中高度では中程度
+            } else if (altitudeRatio > 0.1) {
+                targetVelocity = 3; // 低高度では慎重に
+            } else {
+                targetVelocity = 1.5; // 着陸直前は非常に慎重に
+            }
             
-            if (shouldThrust && gameState.fuel > 5 && gameState.demoActionTimer % 10 === 0) {
+            // 着陸直前の特別制御
+            if (gameState.altitude < 50) {
+                targetVelocity = Math.min(targetVelocity, 2.5);
+            }
+            if (gameState.altitude < 20) {
+                targetVelocity = Math.min(targetVelocity, 1.5);
+            }
+            
+            // 推進判断の改善
+            const velocityDiff = velocity - targetVelocity;
+            const shouldThrust = velocityDiff > 0.5; // 目標速度より0.5m/s以上速い場合
+            
+            // 燃料保存のための制御
+            const fuelThreshold = altitudeRatio * 30 + 10; // 高度に応じて燃料保存
+            
+            // 推進の頻度調整（速度差が大きいほど頻繁に）
+            let thrustInterval;
+            if (Math.abs(velocityDiff) > 3) {
+                thrustInterval = 3; // 緊急時は頻繁に
+            } else if (Math.abs(velocityDiff) > 1) {
+                thrustInterval = 8; // 通常時
+            } else {
+                thrustInterval = 15; // 細かい調整
+            }
+            
+            if (shouldThrust && 
+                gameState.fuel > fuelThreshold && 
+                gameState.demoActionTimer % thrustInterval === 0) {
                 thrust();
             }
         }
@@ -571,12 +609,24 @@ ${altitudeBar}
             gameState.demoActionTimer = 0;
             document.getElementById('demoText').style.display = 'block';
             
-            // ゲームを自動開始
+            // ゲームを自動開始し、デモ用の説明を表示
             setTimeout(() => {
                 if (gameState.isDemo) {
+                    displayText = `
+=== デモンストレーション ===
+
+AIが月面着陸を実演します。
+
+高度と速度を確認しながら、
+適切なタイミングでエンジンを点火し、
+安全な着陸を目指します。
+
+あなたも挜戦してみましょう！
+                    `;
+                    document.getElementById('gameArea').innerHTML = displayText;
                     startGame();
                 }
-            }, 1000);
+            }, 1500);
         }
         
         // デモモード終了
