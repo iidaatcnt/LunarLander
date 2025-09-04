@@ -235,6 +235,11 @@
         function startGame() {
             if (gameState.gameRunning) return;
             
+            // デモモードを終了
+            if (gameState.isDemo) {
+                stopDemo();
+            }
+            
             // ゲーム状態をリセット
             gameState = {
                 altitude: 1000,
@@ -243,7 +248,10 @@
                 thrustPower: 0,
                 gravity: 0.8,  // 重力を半分に
                 gameRunning: true,
-                gameOver: false
+                gameOver: false,
+                isDemo: false,
+                lastUserInput: Date.now(),
+                demoActionTimer: 0
             };
             
             document.getElementById('startBtn').disabled = true;
@@ -409,11 +417,9 @@ ${altitudeBar}
             
             document.getElementById('gameArea').innerHTML = result;
             
-            // ボタンを有効化してテキストを変更
-            setTimeout(() => {
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('startBtn').textContent = '再チャレンジ';
-            }, 1000);
+            // ボタンを即座に有効化してテキストを変更
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').textContent = '再チャレンジ';
         }
 
         // キャンバスの描画処理
@@ -608,6 +614,10 @@ ${altitudeBar}
             gameState.isDemo = true;
             gameState.demoActionTimer = 0;
             document.getElementById('demoText').style.display = 'block';
+            
+            // ボタンを有効化してテキストを変更
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').textContent = 'プレイ開始';
             
             // ゲームを自動開始し、デモ用の説明を表示
             setTimeout(() => {
