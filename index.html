@@ -184,7 +184,10 @@
                 thrustPower: 0,
                 gravity: 0.8,
                 gameRunning: false,
-                gameOver: false
+                gameOver: false,
+                isDemo: false,
+                lastUserInput: Date.now() - 3000, // 3秒前に設定してデモが早く開始されるように
+                demoActionTimer: 0
             };
             updateDisplay();
             showWelcomeMessage();
@@ -269,8 +272,10 @@
         }
 
         function gameLoop() {
-            // デモモードのチェック
-            checkDemoMode();
+            // デモモードのチェック（ゲーム開始前のみ）
+            if (!gameState.gameRunning && !gameState.gameOver) {
+                checkDemoMode();
+            }
             
             // デモモード中はAIが操作
             if (gameState.isDemo) {
